@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
-<title>PRASHANTH CRM — Cloud Edition</title>
+<title>Ply Master CRM — Cloud Edition</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://cdnjs.cloudflare.com">
+<link rel="preconnect" href="https://www.gstatic.com">
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-app-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-auth-compat.js" defer></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.1/firebase-firestore-compat.js" defer></script>
 <style>
 /* ============ TOKENS ============ */
 :root{
@@ -437,17 +437,17 @@ tbody tr:hover{background:var(--surface-2);}
    ===================================================================== */
 
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDUZBfsMog2UrOQ__ckdN7u2JflFYQyTUc",
-  authDomain: "pe-crm-72b44.firebaseapp.com",
-  projectId: "pe-crm-72b44",
-  storageBucket: "pe-crm-72b44.firebasestorage.app",
-  messagingSenderId: "1066707441460",
-  appId: "G-51D903JQ6G"
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT_ID.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
 };
 
 // Only these Gmail accounts will be allowed to sign in and see your data.
 const ALLOWED_EMAILS = [
-  "manage.dropx@gmail.com",
+  "you@gmail.com",
   "your.sales.exec@gmail.com"
 ];
 
@@ -541,6 +541,20 @@ function addDays(iso, n){ const d=new Date(iso+'T00:00:00'); d.setDate(d.getDate
 function daysBetween(a,b){ return Math.round((new Date(b)-new Date(a))/86400000); }
 function esc(s){ return (s===undefined||s===null?'':String(s)).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function toast(msg){ const w=document.getElementById('toastWrap'); const t=document.createElement('div'); t.className='toast'; t.textContent=msg; w.appendChild(t); setTimeout(()=>t.remove(),3200); }
+// Loads a <script> tag once and caches the promise, so heavy libraries (charts, Excel)
+// only download the first time a page that actually needs them is opened.
+const __scriptCache = {};
+function loadScriptOnce(src){
+  if(__scriptCache[src]) return __scriptCache[src];
+  __scriptCache[src] = new Promise((resolve,reject)=>{
+    const s = document.createElement('script');
+    s.src = src; s.onload = resolve; s.onerror = ()=>reject(new Error('Failed to load '+src));
+    document.head.appendChild(s);
+  });
+  return __scriptCache[src];
+}
+async function ensureChartJs(){ if(typeof Chart==='undefined'){ await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js'); } }
+async function ensureXLSX(){ if(typeof XLSX==='undefined'){ await loadScriptOnce('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'); } }
 
 /* ---------------- DEFAULT SETTINGS ---------------- */
 const DEFAULT_BUSINESS_TYPES = ['Plywood Dealer','Plywood Shop','Timber Dealer','Hardware Dealer','Furniture Shop','Interior Designer','Interior Contractor','Modular Kitchen','Modular Furniture','Carpenter','Architect','Builder','Contractor','Other'];
@@ -743,7 +757,7 @@ function render(){
     payments:renderPayments, orders:renderOrders, notices:renderNotices,
     visits:renderVisits, reports:renderReports, importexport:renderImportExport, trash:renderTrash, settings:renderSettings };
   root.innerHTML = state.detailLeadId ? renderLeadDetail(state.detailLeadId) : (pages[state.page]||renderDashboard)();
-  if(state.page==='reports' && !state.detailLeadId) drawCharts();
+  if(state.page==='reports' && !state.detailLeadId) ensureChartJs().then(drawCharts);
 }
 
 /* ============================================================
@@ -1901,8 +1915,9 @@ function renderImportExport(){
   `;
 }
 let __importRows = null;
-function handleImportFile(e){
+async function handleImportFile(e){
   const file = e.target.files[0]; if(!file) return;
+  await ensureXLSX();
   const reader = new FileReader();
   reader.onload = ev => {
     const wb = XLSX.read(ev.target.result, {type: file.name.endsWith('.csv')?'string':'array'});
@@ -1947,7 +1962,8 @@ function confirmImport(){
   toast(`Imported ${added} leads. ${skipped} skipped.`);
   renderNav(); goPage('leads');
 }
-function downloadWorkbook(rows, filename, sheetName){
+async function downloadWorkbook(rows, filename, sheetName){
+  await ensureXLSX();
   const ws = XLSX.utils.json_to_sheet(rows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, sheetName||'Sheet1');
@@ -2147,7 +2163,10 @@ function toggleTheme(){
   if(state.page==='reports') drawCharts();
 }
 
-init();
+// Deferred scripts (Firebase SDK) finish executing before DOMContentLoaded fires,
+// so waiting for that event guarantees `firebase` is available before init() runs.
+if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+else init();
 </script>
 </body>
 </html>
